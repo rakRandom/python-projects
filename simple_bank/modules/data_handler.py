@@ -1,70 +1,146 @@
-import json
-
-DATA_PATH = "data/accounts.json"
-
-
-def get_data() -> dict:
-    with open(DATA_PATH, "r") as file:
-        data = json.loads(file.read())
-    if data:
-        return data
-    else:
-        return {}
+import mysql.connector
+from sys import exit as sysexit
 
 
-def set_data(username: str,
-             attr: str,
-             new_val):
-    data = get_data()
-    if username not in data.keys():
-        print("User does not exist.")
-        return
+class DataHandler:
+    def __init__(self):
+        self.host: str = "localhost"  # The host of your database | Default: localhost
+        self.user: str = "root"  # Your username | Default: root
+        self.password: str = "1234"  # Your password | Default: 1234
+        self.database: str = "banco"  # The MySQL scheme name | Default: banco
+        self.table: str = "users"  # The MySQL users table | Default: users
 
-    data[username][attr] = new_val
+        # Connecting to the DB
+        try:
+            self.connection = mysql.connector.connect(
+                host=self.host,
+                user=self.user,
+                password=self.password,
+                database=self.database
+            )
+            self.cursor = self.connection.cursor()
+        except Exception as e:
+            print(f"Error: Unable to connect to the database. Check if MySQL is downloaded and if {self.database} exists.")
+            print(f"Exception: {e}")
+            sysexit(1)
 
-    with open(DATA_PATH, "w") as file:
-        file.write(json.dumps(data, indent=4))
+        # Checking if the table exists
+        self.cursor.execute('SHOW TABLES')
+        table_list = [item[0] for item in self.cursor.fetchall()]
 
+        # If it does not exist, create
+        try:
+            if self.table not in table_list:
+                self.cursor.execute(f"""CREATE TABLE {self.database}.{self.table} (
+                                        `id` INT NOT NULL AUTO_INCREMENT,
+                                        `username` VARCHAR(64) NOT NULL,
+                                        `password` VARCHAR(64) NOT NULL,
+                                        `money` DECIMAL(65,30) NULL,
+                                        PRIMARY KEY (`id`),
+                                        UNIQUE INDEX `username_UNIQUE` (`username` ASC) VISIBLE)""")
 
-def create_user(username: str,
-                password: str):
-    data = get_data()
-    if username in data.keys():
-        print("This username is already taken.")
-        return
+                self.connection.commit()
+        except Exception as e:
+            print(f"Error: Unable to create users table. Check if database name and table name are written correctly.")
+            print(f"Exception: {e}")
+            sysexit(1)
 
-    user = {
-        username: {
-            "password": password,
-            "money": 0
+    def get_data(self) -> dict:
+        self.cursor.execute(f'SELECT * FROM {self.table}')
+        data = {
+            val[1]: {
+                "password": val[2],
+                "money": float(val[3])
+            } for val in self.cursor.fetchall()
         }
-    }
-    data.update(user)
 
-    with open(DATA_PATH, "w") as file:
-        file.write(json.dumps(data, indent=4))
+        if data:
+            return data
+        else:
+            return {}
 
+    def set_data(self,
+                 username: str,
+                 attr: str,
+                 new_val) -> bool:
+        data: dict = self.get_data()
+        if username not in data.keys():
+            print("User does not exist.")
+            return False
 
-def delete_user(username: str):
-    data = get_data()
-    if username not in data.keys():
-        print("User does not exist.")
-        return
+        try:
+            self.cursor.execute(f'UPDATE {self.table} SET {attr} = "{new_val}" WHERE username = "{username}"')
+        except mysql.connector.InterfaceError as e:
+            print(f"Error: {e}")
+        except mysql.connector.ProgrammingError as e:
+            print(f"Error: {e}")
+        else:
+            self.connection.commit()
+            return True
+        return False
 
-    del data[username]
+    def create_user(self,
+                    username: str,
+                    password: str) -> bool:
+        data: dict = self.get_data()
+        if username in data.keys():
+            print("This username is already taken.")
+            return False
 
-    with open(DATA_PATH, "w") as file:
-        file.write(json.dumps(data, indent=4))
+        try:
+            self.cursor.execute(f'INSERT INTO {self.table} (username, password, money) VALUES ("{username}", "{password}", 0)')
+        except mysql.connector.InterfaceError as e:
+            print(f"Error: {e}")
+        except mysql.connector.ProgrammingError as e:
+            print(f"Error: {e}")
+        else:
+            self.connection.commit()
+            return True
+        return False
 
+    def delete_user(self,
+                    username: str) -> bool:
+        data: dict = self.get_data()
+        if username not in data.keys():
+            print("User does not exist.")
+            return False
 
-def update_money(username: str,
-                 change: int):
-    data = get_data()
-    if username not in data.keys():
-        print("User does not exist.")
-        return
+        try:
+            self.cursor.execute(f'DELETE FROM {self.table} WHERE username = "{username}"')
+        except mysql.connector.InterfaceError as e:
+            print(f"Error: {e}")
+        except mysql.connector.ProgrammingError as e:
+            print(f"Error: {e}")
+        else:
+            self.connection.commit()
+            return True
+        return False
 
-    data[username]["money"] += change
+    def update_money(self,
+                     username: str,
+                     change: int) -> bool:
+        data: dict = self.get_data()
+        if username not in data.keys():
+            print("User does not exist.")
+            return False
 
-    with open(DATA_PATH, "w") as file:
-        file.write(json.dumps(data, indent=4))
+        try:
+            self.cursor.execute(f'UPDATE {self.table} SET money = {data[username]["money"] + change} WHERE username = "{username}"')
+        except mysql.connector.InterfaceError as e:
+            print(f"Error: {e}")
+        except mysql.connector.ProgrammingError as e:
+            print(f"Error: {e}")
+        else:
+            self.connection.commit()
+            return True
+        return False
+
+    def close(self) -> None:  # Method to close the connection with the database
+        print("\nClosing...")
+        try:
+            self.cursor.close()
+            self.connection.close()
+        except Exception as e:
+            print(f"Error: {e}")
+        else:
+            print("Closed.")

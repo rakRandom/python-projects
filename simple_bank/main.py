@@ -1,4 +1,4 @@
-from modules import data_handler as data_h
+from modules.data_handler import DataHandler
 from modules import cash_handler as cash_h
 from modules import account_handler as account_h
 from sys import exit
@@ -19,7 +19,7 @@ def loading(times=1):
     print("\r ", end="")
 
 
-def main():
+def main(data_h: DataHandler):
     username: str | None = None
     user_selection: int
 
@@ -87,5 +87,10 @@ What you want to do?
 
 
 if __name__ == '__main__':
-    while True:
-        main()
+    data_handler = DataHandler()
+
+    try:
+        while True:
+            main(data_handler)
+    finally:
+        data_handler.close()
