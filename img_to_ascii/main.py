@@ -2,13 +2,17 @@ from PIL import Image
 
 
 def run():
-    resolution = 300
+    resolution = int(input("ascii height: "))
+    image_path = input("image path: ")
 
-    image = Image.open(input("file path: ")).convert('L')
+    # Correction for text editors that don't show properly the ASCII image
+    width_correction = 2
+
+    image = Image.open(image_path).convert('L')
     w, h = image.size
 
     if resolution != 0:
-        image = image.resize((int(resolution * w / h) * 2, resolution))
+        image = image.resize((int(resolution * w / h) * width_correction, resolution))
         w, h = image.size
 
     text = ""
@@ -47,6 +51,8 @@ def run():
 
     with open('output.txt', 'w') as file:
         file.write(text)
+
+    image.close()
 
 
 if __name__ == '__main__':
